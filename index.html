@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOKOTranslate</title>
+</head>
+
+<body>
+    KOKO Voice Translator
+
+    <div class="browser-landing" id="main">
+        <div id="div_start">
+            <button id="start_button" onclick="startButton(event)">start</button>
+        </div>
+    </div>
+    </div>
+    <script>
+        const params = (new URL(document.location)).searchParams
+        const pFrom = params.get("from")
+        const pTo = params.get("to")
+        // const pSession = params.get("session")
+        const pUserId = params.get("userid")
+        console.log(pFrom, pTo, pUserId)
+
+        const ws = new WebSocket(`wss://translate-api.kokoa.dev/v1/ws/${pUserId}`)
+        ws.onmessage = async (msg) => {
+            if (msg.data.startsWith("C")) {
+                console.log("recieved", msg.data)
+            }
+        }
+
+        setInterval(() => {
+            ws.send("S:HB")
+        }, 5000)
+
+        const langMap = { "ja": "ja-JP", "en": "en-US", "ko": "ko-KR", "cn": "cmn-Hans-CN", "ru": "ru-RU" }
+
+        function startButton() {
+            if (recognizing) {
+                recognition.stop();
+                return;
+            }
+            console.log(langMap[pFrom])
+            recognition.lang = langMap[pFrom];
+            recognition.start();
+            start_button.innerHTML = 'stop';
+        }
+
+        var recognizing = false;
+        var recognition = null;
+
+        if (!('webkitSpeechRecognition' in window)) {
+            console.log("Chromeじゃない")
+        } else {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            recognition.onstart = function () {
+                recognizing = true;
+                start_button.innerHTML = 'STOP';
+            };
+
+            recognition.onend = function () {
+                recognizing = false;
+                console.log("onEnd")
+                // recognition.start();
+            };
+
+            recognition.onresult = async function (event) {
+                var interim_transcript = '';
+                if (typeof (event.results) == 'undefined') {
+                    recognition.onend = null;
+                    recognition.stop();
+                    return;
+                }
+                for (var i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        console.log("確定", event.results[i][0].transcript)
+                        if (pFrom !== pTo) {
+                            const result = await translate(pFrom, pTo, event.results[i][0].transcript)
+                            ws.send("S:OK\n" + event.results[i][0].transcript + "\n" + result)
+                        } else {
+                            ws.send("S:OK\n" + event.results[i][0].transcript + "\n" + event.results[i][0].transcript)
+                        }
+                    } else {
+                        console.log("未確定", event.results[i][0].transcript)
+                        const res = await tmpTranslate(pFrom, pTo, event.results[i][0].transcript)
+                        ws.send("S:TMP\n" + event.results[i][0].transcript + "\n" + res)
+                    }
+                }
+            };
+        }
+
+        async function tmpTranslate(from, to, text) {
+            const api = "https://translate-api.kokoa.dev/v1/tmp-translate"
+            const result = await fetch(`${api}?from=${from}&to=${to}&text=${text}`)
+            return await result.text()
+        }
+
+        async function translate(from, to, text) {
+            const api = "https://translate-api.kokoa.dev/v1/translate"
+            const result = await fetch(`${api}?from=${from}&to=${to}&text=${text}`)
+            return await result.text()
+        }
+
+    </script>
+</body>
+
+</html>
