@@ -9,105 +9,116 @@
 </head>
 
 <body>
-    KOKO Voice Translator
-
-    <div class="browser-landing" id="main">
-        <div id="div_start">
-            <button id="start_button" onclick="startButton(event)">start</button>
-        </div>
+<h1>KOKO Voice Translator</h1>
+<p id="tmpText">ここに認識したテキストが表示されます</p>
+<div>
+    <div id="div_start">
+        <button id="start_button" onclick="startButton(event)" style="width: 100px; height: 40px">start</button>
     </div>
-    </div>
-    <script>
-        const params = (new URL(document.location)).searchParams
-        const pFrom = params.get("from")
-        const pTo = params.get("to")
-        // const pSession = params.get("session")
-        const pUserId = params.get("userid")
-        console.log(pFrom, pTo, pUserId)
+    <hr>
+    <p>もし動かない場合は、マイクの設定を確認してください。</p>
+    <img src="img.png" style="width: 300px">
+</div>
+</div>
+<script>
+  const params = (new URL(document.location)).searchParams
+  const pFrom = params.get("from")
+  const pTo = params.get("to")
+  // const pSession = params.get("session")
+  const pUserId = params.get("userid")
+  console.log(pFrom, pTo, pUserId)
 
-        const ws = new WebSocket(`wss://translate-api.kokoa.dev/v1/ws/${pUserId}`)
-        ws.onmessage = async (msg) => {
-            if (msg.data.startsWith("C")) {
-                console.log("recieved", msg.data)
-            }
-        }
+  const ws = new WebSocket(`wss://translate-api.kokoa.dev/v1/ws/${pUserId}`)
+  ws.onmessage = async (msg) => {
+    if (msg.data.startsWith("C")) {
+      console.log("recieved", msg.data)
+    }
+  }
 
-        setInterval(() => {
-            ws.send("S:HB")
-        }, 5000)
+  setInterval(() => {
+    ws.send("S:HB")
+  }, 5000)
 
-        const langMap = { "ja": "ja-JP", "en": "en-US", "ko": "ko-KR", "cn": "cmn-Hans-CN", "ru": "ru-RU" }
+  let rec_continue = false
 
-        function startButton() {
-            if (recognizing) {
-                recognition.stop();
-                return;
-            }
-            console.log(langMap[pFrom])
-            recognition.lang = langMap[pFrom];
-            recognition.start();
-            start_button.innerHTML = 'stop';
-        }
+  const langMap = {"ja": "ja-JP", "en": "en-US", "ko": "ko-KR", "cn": "cmn-Hans-CN", "ru": "ru-RU"}
 
-        var recognizing = false;
-        var recognition = null;
+  function startButton() {
+    if (recognizing) {
+      rec_continue = false;
+      recognition.stop();
+      start_button.innerHTML = 'start';
+      return;
+    }
+    console.log(langMap[pFrom])
+    recognition.lang = langMap[pFrom];
+    rec_continue = true;
+    recognition.start();
+    start_button.innerHTML = 'stop';
+  }
 
-        if (!('webkitSpeechRecognition' in window)) {
-            console.log("Chromeじゃない")
+  var recognizing = false;
+  var recognition = null;
+
+  if (!('webkitSpeechRecognition' in window)) {
+    console.log("Chromeじゃない")
+  } else {
+    recognition = new webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onstart = function () {
+      recognizing = true;
+      start_button.innerHTML = 'STOP';
+    };
+
+    recognition.onend = function () {
+      recognizing = false;
+      console.log("onEnd")
+      if (rec_continue) {
+        recognition.start();
+      }
+    };
+
+    recognition.onresult = async function (event) {
+      var interim_transcript = '';
+      if (typeof (event.results) == 'undefined') {
+        recognition.onend = null;
+        recognition.stop();
+        return;
+      }
+      for (var i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          console.log("確定", event.results[i][0].transcript)
+          if (pFrom !== pTo) {
+            const result = await translate(pFrom, pTo, event.results[i][0].transcript)
+            ws.send("S:OK\n" + event.results[i][0].transcript + "\n" + result)
+          } else {
+            ws.send("S:OK\n" + event.results[i][0].transcript + "\n" + event.results[i][0].transcript)
+          }
         } else {
-            recognition = new webkitSpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-
-            recognition.onstart = function () {
-                recognizing = true;
-                start_button.innerHTML = 'STOP';
-            };
-
-            recognition.onend = function () {
-                recognizing = false;
-                console.log("onEnd")
-                // recognition.start();
-            };
-
-            recognition.onresult = async function (event) {
-                var interim_transcript = '';
-                if (typeof (event.results) == 'undefined') {
-                    recognition.onend = null;
-                    recognition.stop();
-                    return;
-                }
-                for (var i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        console.log("確定", event.results[i][0].transcript)
-                        if (pFrom !== pTo) {
-                            const result = await translate(pFrom, pTo, event.results[i][0].transcript)
-                            ws.send("S:OK\n" + event.results[i][0].transcript + "\n" + result)
-                        } else {
-                            ws.send("S:OK\n" + event.results[i][0].transcript + "\n" + event.results[i][0].transcript)
-                        }
-                    } else {
-                        console.log("未確定", event.results[i][0].transcript)
-                        const res = await tmpTranslate(pFrom, pTo, event.results[i][0].transcript)
-                        ws.send("S:TMP\n" + event.results[i][0].transcript + "\n" + res)
-                    }
-                }
-            };
+          console.log("未確定", event.results[i][0].transcript)
+          tmpText.innerText = event.results[i][0].transcript
+          const res = await tmpTranslate(pFrom, pTo, event.results[i][0].transcript)
+          ws.send("S:TMP\n" + event.results[i][0].transcript + "\n" + res)
         }
+      }
+    };
+  }
 
-        async function tmpTranslate(from, to, text) {
-            const api = "https://translate-api.kokoa.dev/v1/tmp-translate"
-            const result = await fetch(`${api}?from=${from}&to=${to}&text=${text}`)
-            return await result.text()
-        }
+  async function tmpTranslate(from, to, text) {
+    const api = "https://translate-api.kokoa.dev/v1/tmp-translate"
+    const result = await fetch(`${api}?from=${from}&to=${to}&text=${text}`)
+    return await result.text()
+  }
 
-        async function translate(from, to, text) {
-            const api = "https://translate-api.kokoa.dev/v1/translate"
-            const result = await fetch(`${api}?from=${from}&to=${to}&text=${text}`)
-            return await result.text()
-        }
+  async function translate(from, to, text) {
+    const api = "https://translate-api.kokoa.dev/v1/translate"
+    const result = await fetch(`${api}?from=${from}&to=${to}&text=${text}`)
+    return await result.text()
+  }
 
-    </script>
+</script>
 </body>
 
 </html>
