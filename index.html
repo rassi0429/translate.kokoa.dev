@@ -9,7 +9,7 @@
 </head>
 
 <body>
-<h1>KOKO Voice Translator</h1>
+<h1>KOKO Voice Translator v1.0.1</h1>
 <p id="tmpText">ここに認識したテキストが表示されます</p>
 <div>
     <div id="div_start">
@@ -81,7 +81,7 @@
     };
 
     recognition.onresult = async function (event) {
-      var interim_transcript = '';
+      // var interim_transcript = '';
       if (typeof (event.results) == 'undefined') {
         recognition.onend = null;
         recognition.stop();
@@ -97,10 +97,19 @@
             ws.send("S:OK\n" + event.results[i][0].transcript + "\n" + event.results[i][0].transcript)
           }
         } else {
-          console.log("未確定", event.results[i][0].transcript)
-          tmpText.innerText = event.results[i][0].transcript
-          const res = await tmpTranslate(pFrom, pTo, event.results[i][0].transcript)
-          ws.send("S:TMP\n" + event.results[i][0].transcript + "\n" + res)
+            if(event.results.length > 1) {
+                const text = Array.from(event.results).map(r => r[0].transcript).join(" ")
+                console.log("未確定", text)
+                tmpText.innerText = text
+                const res = await tmpTranslate(pFrom, pTo, text)
+                ws.send("S:TMP\n" + text + "\n" + res)
+                break
+            } else {
+                tmpText.innerText = event.results[i][0].transcript
+                console.log("未確定", event.results[i][0].transcript)
+                const res = await tmpTranslate(pFrom, pTo, event.results[i][0].transcript)
+                ws.send("S:TMP\n" + event.results[i][0].transcript + "\n" + res)
+            }
         }
       }
     };
