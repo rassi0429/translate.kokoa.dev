@@ -9,7 +9,7 @@
 </head>
 
 <body>
-<h1>KOKO Voice Translator v1.0.1</h1>
+<h1>KOKO Voice Translator v1.0.2</h1>
 <p id="tmpText">ここに認識したテキストが表示されます</p>
 <div>
     <div id="div_start">
@@ -98,7 +98,7 @@
           }
         } else {
             if(event.results.length > 1) {
-                const text = Array.from(event.results).map(r => r[0].transcript).join(" ")
+                const text = Array.from(event.results).filter(r => !r.isFinal).map(r => r[0].transcript).join(" ")
                 console.log("未確定", text)
                 tmpText.innerText = text
                 const res = await tmpTranslate(pFrom, pTo, text)
