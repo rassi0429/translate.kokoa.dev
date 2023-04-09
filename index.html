@@ -116,9 +116,6 @@
   }
 
   async function tmpTranslate(from, to, text) {
-    if(!text) {
-      return ""
-    }
     const api = "https://translate-api.kokoa.dev/v1/tmp-translate"
     const result = await fetch(`${api}?from=${from}&to=${to}&text=${text}`)
     return await result.text()
