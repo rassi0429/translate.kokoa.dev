@@ -9,7 +9,7 @@
 </head>
 
 <body>
-<h1>KOKO Voice Translator v1.0.2</h1>
+<h1>KOKO Voice Translator v1.0.3</h1>
 <p id="tmpText">ここに認識したテキストが表示されます</p>
 <div>
     <div id="div_start">
@@ -116,12 +116,18 @@
   }
 
   async function tmpTranslate(from, to, text) {
+    if(!text) {
+      return ""
+    }
     const api = "https://translate-api.kokoa.dev/v1/tmp-translate"
     const result = await fetch(`${api}?from=${from}&to=${to}&text=${text}`)
     return await result.text()
   }
 
   async function translate(from, to, text) {
+    if(!text) {
+      return ""
+    }
     const api = "https://translate-api.kokoa.dev/v1/translate"
     const result = await fetch(`${api}?from=${from}&to=${to}&text=${text}`)
     return await result.text()
